@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const C = {
   bg:      "#ffffff",
@@ -611,12 +611,52 @@ Return ONLY a JSON object with platform names as keys.`,
   );
 }
 
+// ── Save helper ───────────────────────────────────────────────────────────────
+function saveManuscript(chapters) {
+  const lines = chapters.flatMap(c => [
+    `${"═".repeat(60)}`,
+    `  ${c.title.toUpperCase()}`,
+    `${"═".repeat(60)}`,
+    "",
+    c.content.trim() || "(empty)",
+    "",
+  ]);
+  const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "manuscript.txt";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const apiKey = import.meta.env.VITE_GROQ_API_KEY || "";
   const [tab, setTab] = useState("write");
   const [chapters, setChapters] = useState([{ id: 1, title: "Chapter 1", content: "" }]);
   const [activeId, setActiveId] = useState(1);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
+
+  const handleSave = () => {
+    saveManuscript(chapters);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   if (!apiKey) return <NoKey />;
 
@@ -627,11 +667,19 @@ export default function App() {
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "44px", zIndex: 10,
         borderBottom: `1px solid ${C.border}`, background: C.bg,
         display: "flex", alignItems: "center" }}>
-        <div style={{ padding: "0 22px", fontFamily: "var(--font-serif)", fontSize: "15px",
-          color: C.text, borderRight: `1px solid ${C.border}`, height: "100%",
-          display: "flex", alignItems: "center", minWidth: "190px", flexShrink: 0 }}>
-          Manuscript
+
+        {/* Logo + wordmark */}
+        <div style={{ padding: "0 16px 0 14px", height: "100%", display: "flex",
+          alignItems: "center", gap: "10px", borderRight: `1px solid ${C.border}`,
+          minWidth: "190px", flexShrink: 0 }}>
+          <img src="/logo.png" alt="Manuscript" width={24} height={24}
+            style={{ borderRadius: "5px", flexShrink: 0 }} />
+          <span style={{ fontFamily: "var(--font-serif)", fontSize: "15px", color: C.text }}>
+            Manuscript
+          </span>
         </div>
+
+        {/* Tabs */}
         <div style={{ display: "flex", height: "100%" }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -645,7 +693,45 @@ export default function App() {
             </button>
           ))}
         </div>
+
         <div style={{ flex: 1 }} />
+
+        {/* Save button */}
+        <button onClick={handleSave}
+          style={{ padding: "0 18px", height: "100%", background: "none", border: "none",
+            borderLeft: `1px solid ${C.border}`,
+            color: saved ? C.sub : C.text, cursor: "pointer",
+            fontSize: "12px", fontWeight: "500", fontFamily: "var(--font-sans)",
+            display: "flex", alignItems: "center", gap: "6px", transition: "color 0.2s" }}>
+          {/* floppy-disk icon */}
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+            xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+            <rect x="4" y="1" width="6" height="5" rx="0.5" fill="currentColor"/>
+            <rect x="3" y="8" width="10" height="6" rx="0.5" fill="currentColor"/>
+            <rect x="5" y="9.5" width="2" height="3" rx="0.3" fill={C.bg}/>
+          </svg>
+          {saved ? "Saved!" : "Save"}
+        </button>
+
+        {/* Install button — only shown when PWA prompt is available */}
+        {installPrompt && (
+          <button onClick={handleInstall}
+            style={{ padding: "0 18px", height: "100%", background: C.black, border: "none",
+              borderLeft: `1px solid ${C.border}`,
+              color: "#fff", cursor: "pointer",
+              fontSize: "12px", fontWeight: "500", fontFamily: "var(--font-sans)",
+              display: "flex", alignItems: "center", gap: "6px" }}>
+            {/* download icon */}
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"
+              xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 1v9M4.5 7l3.5 3.5L11.5 7" stroke="currentColor"
+                strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            Install
+          </button>
+        )}
       </div>
 
       {/* Content */}

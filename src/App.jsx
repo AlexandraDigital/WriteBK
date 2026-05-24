@@ -630,6 +630,65 @@ function saveManuscript(chapters) {
   URL.revokeObjectURL(url);
 }
 
+function importManuscript(file, callback) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const lines = text.split("\n");
+      const chapters = [];
+      let currentTitle = null;
+      let currentContent = [];
+      let inContent = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        
+        if (line.includes("═")) {
+          if (currentTitle && inContent) {
+            chapters.push({
+              id: Date.now() + chapters.length,
+              title: currentTitle,
+              content: currentContent.join("\n").trim()
+            });
+            currentContent = [];
+            inContent = false;
+          }
+          
+          if (i + 1 < lines.length) {
+            const titleLine = lines[i + 1].trim();
+            if (titleLine) {
+              currentTitle = titleLine;
+              i += 2;
+              inContent = true;
+              continue;
+            }
+          }
+        } else if (inContent && currentTitle) {
+          currentContent.push(line);
+        }
+      }
+
+      if (currentTitle) {
+        chapters.push({
+          id: Date.now() + chapters.length,
+          title: currentTitle,
+          content: currentContent.join("\n").trim()
+        });
+      }
+
+      if (chapters.length > 0) {
+        callback(chapters);
+      } else {
+        alert("No chapters found in file. Make sure it's a saved manuscript.");
+      }
+    } catch (err) {
+      alert("Error reading file: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const apiKey = import.meta.env.VITE_GROQ_API_KEY || "";
@@ -656,6 +715,16 @@ export default function App() {
     saveManuscript(chapters);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    importManuscript(file, (importedChapters) => {
+      setChapters(importedChapters);
+      setActiveId(importedChapters[0].id);
+      e.target.value = '';
+    });
   };
 
   if (!apiKey) return <NoKey />;
@@ -713,6 +782,24 @@ export default function App() {
           </svg>
           {saved ? "Saved!" : "Save"}
         </button>
+
+        {/* Import button */}
+        <label style={{ padding: "0 18px", height: "100%", background: "none", border: "none",
+          borderLeft: `1px solid ${C.border}`,
+          color: C.text, cursor: "pointer",
+          fontSize: "12px", fontWeight: "500", fontFamily: "var(--font-sans)",
+          display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* upload icon */}
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+            xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 14V5M4.5 8l3.5-3.5L11.5 8" stroke="currentColor"
+              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          Import
+          <input type="file" accept=".txt" onChange={handleImport}
+            style={{ display: "none" }} />
+        </label>
 
         {/* Install button — only shown when PWA prompt is available */}
         {installPrompt && (
